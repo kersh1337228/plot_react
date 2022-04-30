@@ -1,7 +1,7 @@
 import React from 'react'
 
 
-// Figure inner axis class
+// figures.main inner axis class
 class Axis {
     constructor() {
         this.center = 0
@@ -18,7 +18,6 @@ class Axis {
             },
             color: '#000000'
         }
-        this.path = null
     }
     get_labels_font(density) { // Canvas formatted label style
         return `${this.labels.font.style} ${this.labels.font.size * density}px ${this.labels.font.fontFamily}`
@@ -26,29 +25,51 @@ class Axis {
 }
 
 
-// Figure class containing main plot component data
+// figures.main class containing main plot component data
 class Figure {
-    constructor() {
+    constructor(
+        window_size_width, window_size_height, padding_left,
+        padding_top, padding_right, padding_bottom, style_color, style_width,
+        grid_vertical_amount, grid_vertical_color, grid_vertical_width,
+        grid_horizontal_amount, grid_horizontal_color, grid_horizontal_width,
+    ) {
         this.window_size = {
-            width: 850,
-            height: 480,
+            width: window_size_width,
+            height: window_size_height,
         }
         this.scale = {
             width: 1,
             height: 1,
         }
         this.padding = {
-            left: 0,
-            top: 0.1,
-            right: 0,
-            bottom: 0.1
+            left: padding_left,
+            top: padding_top,
+            right: padding_right,
+            bottom: padding_bottom
         }
         this.style = {
-            color: '#ff0000',
-            width: 2
+            color: style_color,
+            width: style_width
         }
+        this.axes = {
+            x: new Axis(),
+            y: new Axis(),
+        }
+        this.grid = {
+            vertical: {
+                amount: grid_vertical_amount,
+                color: grid_vertical_color,
+                width: grid_vertical_width,
+            },
+            horizontal: {
+                amount: grid_horizontal_amount,
+                color: grid_horizontal_color,
+                width: grid_horizontal_width,
+            },
+        }
+        this.canvas = React.createRef()
+        this.context = null
         this.canvas_density = 25
-        this.path = null
     }
     // Canvas actual width
     get_width() {
@@ -62,6 +83,12 @@ class Figure {
     get_line_width() {
         return this.style.width / (this.scale.height + this.scale.width)
     }
+    set_window() {
+        this.canvas.current.style.width = `${this.window_size.width}px`
+        this.canvas.current.style.height = `${this.window_size.height}px`
+        this.canvas.current.width = this.get_width()
+        this.canvas.current.height = this.get_height()
+    }
 }
 
 
@@ -72,57 +99,51 @@ export default class Plot extends React.Component {
         super(props)
         this.state = {
             data: props.data,
-            figure: new Figure(),
-            axes: {
-                x: new Axis(),
-                y: new Axis(),
-            },
-            grid: {
-                vertical: {
-                    amount: 10,
-                    color: '#d9d9d9',
-                    width: 1,
-                    path: null,
-                },
-                horizontal: {
-                    amount: 10,
-                    color: '#d9d9d9',
-                    width: 1,
-                    path: null,
-                },
-            },
-            context: null,
+            figures: {
+                main: new Figure(
+                    850, 480,
+                    0, 0.1, 0, 0.1,
+                    '#ff0000', 2, 10, '#d9d9d9',
+                    1, 10, '#d9d9d9', 1
+
+                ),
+                volume: new Figure(
+                    850, 192,
+                    0, 0.1, 0, 0,
+                    '#ff0000', 2, 10, '#d9d9d9',
+                    1, 4, '#d9d9d9', 1
+                ),
+            }
         }
         this.type = props.type
-        this.canvas = React.createRef()
     }
     // Date-value type plot (<date:String>, <value:Number>)
     plot_date_value() {
         let state = this.state
         const balance = Array.from(this.state.data, obj => obj.balance)
         // Rescaling
-        state.figure.scale.height = (state.figure.get_height() * (1 - state.figure.padding.bottom - state.figure.padding.top)) /
+        state.figures.main.scale.height = (state.figures.main.get_height() * (1 - state.figures.main.padding.bottom - state.figures.main.padding.top)) /
             Math.abs(Math.max.apply(null, balance) - Math.min.apply(null, balance))
-        state.figure.scale.width = (state.figure.get_width() * (1 - state.figure.padding.left - state.figure.padding.right)) / (balance.length - 1)
+        state.figures.main.scale.width = (state.figures.main.get_width() * (1 - state.figures.main.padding.left - state.figures.main.padding.right)) / (balance.length - 1)
         // Moving coordinates system
-        state.axes.y.center = Math.max.apply(null, balance) *
-            state.figure.scale.height + state.figure.padding.top * state.figure.get_height()
-        state.axes.x.center = state.figure.padding.left * state.figure.window_size.width
+        state.figures.main.axes.y.center = Math.max.apply(null, balance) *
+            state.figures.main.scale.height + state.figures.main.padding.top * state.figures.main.get_height()
+        state.figures.main.axes.x.center = state.figures.main.padding.left * state.figures.main.window_size.width
         state.context.save()
-        state.context.translate(state.axes.x.center, state.axes.y.center)
-        state.context.scale(state.figure.scale.width, -state.figure.scale.height)
+        state.context.translate(state.figures.main.axes.x.center, state.figures.main.axes.y.center)
+        state.context.scale(state.figures.main.scale.width, -state.figures.main.scale.height)
         // Drawing plot
-        let figure_path = new Path2D()
-        state.context.lineWidth = state.figure.get_line_width()
-        state.context.strokeStyle = state.figure.style.color
+        state.context.lineWidth = state.figures.main.get_line_width()
+        state.context.strokeStyle = state.figures.main.style.color
         state.context.lineJoin = 'round'
-        figure_path.moveTo(0, state.balance[0])
+        state.context.beginPath()
+        state.context.moveTo(0, state.balance[0])
         for (let i = 1; i < state.balance.length; ++i) {
-            figure_path.lineTo(i, state.balance[i])
+            state.context.lineTo(i, state.balance[i])
         }
-        state.context.stroke(figure_path)
-        // Saving figure path
-        state.figure.path = figure_path
+        state.context.stroke()
+        state.context.closePath()
+        // Saving figures.main path
         state.context.restore() // Restoring context
         this.setState(state)
     }
@@ -132,79 +153,104 @@ export default class Plot extends React.Component {
     // )
     plot_financial() {
         let state = this.state
-        const [lows, highs] = [
+        const [lows, highs, volumes] = [
             Array.from(Object.values(this.state.data), obj => obj.low),
             Array.from(Object.values(this.state.data), obj => obj.high),
+            Array.from(Object.values(this.state.data), obj => obj.volume),
         ]
         // Rescaling
-        state.figure.scale.height = (state.figure.get_height() * (1 - state.figure.padding.bottom - state.figure.padding.top)) /
+        //// Main
+        state.figures.main.scale.height = (
+            state.figures.main.get_height() * (1 - state.figures.main.padding.bottom - state.figures.main.padding.top)) /
             Math.abs(Math.max.apply(null, highs) - Math.min.apply(null, lows))
-        state.figure.scale.width = (state.figure.get_width() * (1 - state.figure.padding.left - state.figure.padding.right)) / (highs.length)
+        state.figures.main.scale.width = state.figures.volume.scale.width = (
+            state.figures.main.get_width() * (1 - state.figures.main.padding.left - state.figures.main.padding.right)) / (highs.length)
+        //// Volume
+        state.figures.volume.scale.height = (
+            state.figures.volume.get_height() * (1 - state.figures.volume.padding.bottom - state.figures.volume.padding.top)) /
+            Math.abs(Math.max.apply(null, volumes) - Math.min.apply(null, volumes))
         // Moving coordinates system
-        state.axes.y.center = Math.max.apply(null, highs) *
-            state.figure.scale.height + state.figure.padding.top * state.figure.get_height()
-        state.axes.x.center = state.figure.padding.left * state.figure.window_size.width
-        state.context.save()
-        state.context.translate(state.axes.x.center, state.axes.y.center)
-        state.context.scale(1, -state.figure.scale.height)
-        // Drawing plot
-        state.context.lineJoin = 'round'
+        //// Main
+        state.figures.main.axes.y.center = Math.max.apply(null, highs) *
+            state.figures.main.scale.height + state.figures.main.padding.top * state.figures.main.get_height()
+        state.figures.main.axes.x.center = state.figures.main.padding.left * state.figures.main.window_size.width
+        state.figures.main.context.save()
+        state.figures.main.context.translate(state.figures.main.axes.x.center, state.figures.main.axes.y.center)
+        state.figures.main.context.scale(1, -state.figures.main.scale.height)
+        //// Volume
+        state.figures.volume.axes.y.center = Math.max.apply(null, volumes) *
+            state.figures.volume.scale.height + state.figures.volume.padding.top * state.figures.volume.get_height()
+        state.figures.volume.axes.x.center = state.figures.volume.padding.left * state.figures.volume.window_size.width
+        state.figures.volume.context.save()
+        state.figures.volume.context.translate(state.figures.volume.axes.x.center, state.figures.volume.axes.y.center)
+        state.figures.volume.context.scale(1, -state.figures.volume.scale.height)
+        // Drawing plots
+        state.figures.main.context.lineJoin = 'round'
         const data = Object.values(state.data)
         for (let i = 0; i < data.length; ++i) {
             const {open, high, low, close, volume} = data[i]
             const style = close - open > 0 ? '#53e9b5' : '#da2c4d'
-            state.context.beginPath()
-            state.context.strokeStyle = style
-            state.context.moveTo((2 * i + 1) * state.figure.scale.width / 2, low)
-            state.context.lineTo((2 * i + 1) * state.figure.scale.width / 2, high)
-            state.context.stroke()
-            state.context.fillStyle = style
-            state.context.fillRect(i * this.state.figure.scale.width , open, this.state.figure.scale.width, close - open)
-            state.context.closePath()
+            // Candle
+            state.figures.main.context.beginPath()
+            state.figures.main.context.strokeStyle = style
+            state.figures.main.context.moveTo((2 * i + 1) * state.figures.main.scale.width / 2, low)
+            state.figures.main.context.lineTo((2 * i + 1) * state.figures.main.scale.width / 2, high)
+            state.figures.main.context.stroke()
+            state.figures.main.context.fillStyle = style
+            state.figures.main.context.fillRect(i * this.state.figures.main.scale.width , open, this.state.figures.main.scale.width, close - open)
+            state.figures.main.context.closePath()
+            // Volume
+            state.figures.volume.context.fillStyle = style
+            state.figures.volume.context.fillRect(i * this.state.figures.main.scale.width , 0, this.state.figures.volume.scale.width, volume)
         }
-        state.context.restore()
+        state.figures.main.context.restore()
+        state.figures.volume.context.restore()
+        this.setState(state)
     }
     // Show translucent grid
-    show_grid(callback) {
-        const context = this.state.context
-        let grid = this.state.grid
+    show_grid(figure) {
+        const context = figure.context
         // Drawing horizontal
-        let horizontal_grid_path = new Path2D()
-        context.lineWidth = grid.horizontal.width * this.state.figure.canvas_density
-        context.strokeStyle = grid.horizontal.color
-        for (let i = 1; i <= grid.horizontal.amount; ++i) {
-            const y = this.state.figure.get_height() * i / grid.horizontal.amount
-            horizontal_grid_path.moveTo(0, y)
-            horizontal_grid_path.lineTo(this.state.figure.get_width(), y)
+        context.lineWidth = figure.grid.horizontal.width * figure.canvas_density
+        context.strokeStyle = figure.grid.horizontal.color
+        context.beginPath()
+        for (let i = 1; i <= figure.grid.horizontal.amount; ++i) {
+            const y = figure.get_height() * i / figure.grid.horizontal.amount
+            context.moveTo(0, y)
+            context.lineTo(this.state.figures.main.get_width(), y)
         }
-        grid.horizontal.path = horizontal_grid_path
-        context.stroke(horizontal_grid_path)
+        context.stroke()
+        context.closePath()
         // Drawing vertical
-        let vertical_grid_path = new Path2D()
-        context.lineWidth = grid.vertical.width * this.state.figure.canvas_density
-        context.strokeStyle = grid.vertical.color
-        for (let i = 1; i <= grid.vertical.amount; ++i) {
-            const x = this.state.figure.get_width() * i / grid.vertical.amount
-            vertical_grid_path.moveTo(x, 0)
-            vertical_grid_path.lineTo(x, this.state.figure.get_height())
+        context.lineWidth = figure.grid.vertical.width * figure.canvas_density
+        context.strokeStyle = figure.grid.vertical.color
+        context.beginPath()
+        for (let i = 1; i <= figure.grid.vertical.amount; ++i) {
+            const x = figure.get_width() * i / figure.grid.vertical.amount
+            context.moveTo(x, 0)
+            context.lineTo(x, figure.get_height())
         }
-        grid.vertical.path = vertical_grid_path
-        context.stroke(vertical_grid_path)
-        this.setState({grid: grid}, callback)
+        context.stroke()
+        context.closePath()
     }
 
     componentDidMount() {
-        let canvas = this.canvas.current
-        canvas.style.width = `${this.state.figure.window_size.width}px`
-        canvas.style.height = `${this.state.figure.window_size.height}px`
-        canvas.width = this.state.figure.get_width()
-        canvas.height = this.state.figure.get_height()
-        this.setState({context: this.canvas.current.getContext('2d')}, () => {
-            this.show_grid({
-                'date_value': this.plot_date_value,
-                'financial': this.plot_financial,
-            }[this.type]) // Choosing plot method depending on plot type
-        })
+        let state = this.state
+        state.figures.main.context = state.figures.main.canvas.current.getContext('2d')
+        state.figures.main.set_window()
+        this.show_grid(state.figures.main)
+        switch (this.type) {
+            case 'date_value':
+                this.plot_date_value()
+                break
+            case 'financial':
+                state.figures.volume.context = state.figures.volume.canvas.current.getContext('2d')
+                state.figures.volume.set_window()
+                this.show_grid(state.figures.volume)
+                this.plot_financial()
+                break
+        }
+        this.setState(state)
     }
 
     componentDidUpdate() {
@@ -212,10 +258,19 @@ export default class Plot extends React.Component {
     }
 
     render() {
-        return (
-            <canvas ref={this.canvas} style={{border: '1px solid black'}}>
-                Canvas tag is not supported by your browser.
-            </canvas>
-        )
+        return this.type === 'date_value' ?
+            <div>
+                <canvas ref={this.state.figures.main.canvas} style={{border: '1px solid black'}}>
+                    Canvas tag is not supported by your browser.
+                </canvas>
+            </div> :
+            <div>
+                <canvas ref={this.state.figures.main.canvas} style={{border: '1px solid black'}}>
+                    Canvas tag is not supported by your browser.
+                </canvas>
+                <canvas ref={this.state.figures.volume.canvas} style={{border: '1px solid black'}}>
+                    Canvas tag is not supported by your browser.
+                </canvas>
+            </div>
     }
 }
