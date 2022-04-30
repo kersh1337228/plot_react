@@ -53,17 +53,16 @@ class Figure {
             color: '#ff0000',
             width: 2
         }
+        this.canvas_density = 25
         this.path = null
     }
     // Canvas actual width
     get_width() {
-        return this.window_size.width *
-            (1 + this.padding.left + this.padding.right)
+        return this.window_size.width * this.canvas_density
     }
     // Canvas actual height
     get_height() {
-        return this.window_size.height *
-            (1 + this.padding.bottom + this.padding.top)
+        return this.window_size.height * this.canvas_density
     }
     // Rescales original line width for proper display
     get_line_width() {
@@ -121,14 +120,14 @@ export default class Plot extends React.Component {
         let figure = this.state.figure
         switch(this.type) {
             case 'date_value':
-                figure.scale.height = (figure.window_size.height * (1 - figure.padding.bottom - figure.padding.top)) /
+                figure.scale.height = (figure.get_height() * (1 - figure.padding.bottom - figure.padding.top)) /
                     Math.abs(Math.max.apply(null, this.state.balance) - Math.min.apply(null, this.state.balance))
-                figure.scale.width = (figure.window_size.width * (1 - figure.padding.left - figure.padding.right)) / (this.state.balance.length - 1)
+                figure.scale.width = (figure.get_width() * (1 - figure.padding.left - figure.padding.right)) / (this.state.balance.length - 1)
                 break
             case 'financial':
-                figure.scale.height = (figure.window_size.height * (1 - figure.padding.bottom - figure.padding.top)) /
+                figure.scale.height = (figure.get_height() * (1 - figure.padding.bottom - figure.padding.top)) /
                     Math.abs(Math.max.apply(null, this.state.high) - Math.min.apply(null, this.state.low))
-                figure.scale.width = (figure.window_size.width * (1 - figure.padding.left - figure.padding.right)) / (this.state.low.length)
+                figure.scale.width = (figure.get_width() * (1 - figure.padding.left - figure.padding.right)) / (this.state.low.length)
                 break
         }
         // Applying changes
@@ -141,31 +140,25 @@ export default class Plot extends React.Component {
         canvas.style.width = `${this.state.figure.window_size.width}px`
         canvas.style.height = `${this.state.figure.window_size.height}px`
         // Canvas
-        canvas.width = this.state.figure.window_size.width
-        canvas.height = this.state.figure.window_size.height
+        canvas.width = this.state.figure.get_width()
+        canvas.height = this.state.figure.get_height()
     }
     // Changing coordinates system center X0 = (x0, y0)
     set_coordinates_system(callback) {
         let axes = this.state.axes
-        const context = this.state.context
-        context.save()
         switch (this.type) { // Window left bottom corner
             case 'date_value':
                 axes.y.center = Math.max.apply(null, this.state.balance) *
-                    this.state.figure.scale.height + this.state.figure.padding.top * this.state.figure.window_size.height
-                context.translate(this.state.axes.x.center, this.state.axes.y.center)
-                context.scale(this.state.figure.scale.width, -this.state.figure.scale.height)
+                    this.state.figure.scale.height + this.state.figure.padding.top * this.state.figure.get_height()
                 break
             case 'financial':
                 axes.y.center = Math.max.apply(null, this.state.high) *
-                    this.state.figure.scale.height + this.state.figure.padding.top * this.state.figure.window_size.height
-                context.translate(this.state.axes.x.center, this.state.axes.y.center)
-                context.scale(1, -this.state.figure.scale.height)
+                    this.state.figure.scale.height + this.state.figure.padding.top * this.state.figure.get_height()
                 break
         }
         axes.x.center = this.state.figure.padding.left * this.state.figure.window_size.width
         // Applying changes
-        this.setState({axes: axes, context: context}, callback)
+        this.setState({axes: axes}, callback)
     }
     // Drawing plot depending on plot type
     plot() {
@@ -184,6 +177,9 @@ export default class Plot extends React.Component {
     // Date-value type plot (<date:String>, <value:Number>)
     plot_date_value() {
         const context = this.state.context
+        context.save()
+        context.translate(this.state.axes.x.center, this.state.axes.y.center)
+        context.scale(this.state.figure.scale.width, -this.state.figure.scale.height)
         // Drawing plot
         let figure_path = new Path2D()
         context.lineWidth = this.state.figure.get_line_width()
@@ -205,8 +201,10 @@ export default class Plot extends React.Component {
     //      (<open:Number>, <high:Number>, <low:Number>, <close:Number>, <volume:Number>)
     // )
     plot_financial() {
-        console.log(this.state)
         const context = this.state.context
+        context.save()
+        context.translate(this.state.axes.x.center, this.state.axes.y.center)
+        context.scale(1, -this.state.figure.scale.height)
         context.lineJoin = 'round'
         let i = 0
         for (const [date, {open, high, low, close, volume}] of Object.entries(this.state.data)) {
@@ -233,23 +231,23 @@ export default class Plot extends React.Component {
         let grid = this.state.grid
         // Drawing horizontal
         let horizontal_grid_path = new Path2D()
-        context.lineWidth = grid.horizontal.width
+        context.lineWidth = grid.horizontal.width * this.state.figure.canvas_density
         context.strokeStyle = grid.horizontal.color
         for (let i = 1; i <= grid.horizontal.amount; ++i) {
-            const y = this.state.figure.window_size.height * i / grid.horizontal.amount
+            const y = this.state.figure.get_height() * i / grid.horizontal.amount
             horizontal_grid_path.moveTo(0, y)
-            horizontal_grid_path.lineTo(this.state.figure.window_size.width, y)
+            horizontal_grid_path.lineTo(this.state.figure.get_width(), y)
         }
         grid.horizontal.path = horizontal_grid_path
         context.stroke(horizontal_grid_path)
         // Drawing vertical
         let vertical_grid_path = new Path2D()
-        context.lineWidth = grid.vertical.width
+        context.lineWidth = grid.vertical.width * this.state.figure.canvas_density
         context.strokeStyle = grid.vertical.color
         for (let i = 1; i <= grid.vertical.amount; ++i) {
-            const x = this.state.figure.window_size.width * i / grid.vertical.amount
+            const x = this.state.figure.get_width() * i / grid.vertical.amount
             vertical_grid_path.moveTo(x, 0)
-            vertical_grid_path.lineTo(x, this.state.figure.window_size.height)
+            vertical_grid_path.lineTo(x, this.state.figure.get_height())
         }
         grid.vertical.path = vertical_grid_path
         context.stroke(vertical_grid_path)
@@ -268,7 +266,7 @@ export default class Plot extends React.Component {
     render() {
         return (
             <canvas ref={this.canvas} style={{border: '1px solid black'}}>
-                Canvas tag not supported by your browser.
+                Canvas tag is not supported by your browser.
             </canvas>
         )
     }
