@@ -1,0 +1,38 @@
+* {
+    margin: 0 0 0 0;
+    padding: 0 0 0 0;
+}
+
+.plot_financial_grid {
+    position: absolute;
+    display: grid;
+    grid-auto-rows: minmax(min-content, max-content);
+}
+
+.canvas_main {
+    grid-row-start: 1;
+    grid-row-end: 2;
+    grid-column-start: 1;
+    grid-column-end: 2;
+}
+
+.canvas_volume {
+    grid-row-start: 2;
+    grid-row-end: 3;
+    grid-column-start: 1;
+    grid-column-end: 2;
+}
+
+.canvas_hit {
+    grid-row-start: 1;
+    grid-row-end: 3;
+    grid-column-start: 1;
+    grid-column-end: 2;
+}
+
+.plot_financial_tooltips {
+    position: absolute;
+    display: flex;
+    flex-direction: row;
+    gap: 10px 10px;
+}

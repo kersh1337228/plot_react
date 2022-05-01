@@ -1,7 +1,8 @@
 import React from 'react'
+import './plot.css'
 
 
-// figures.main inner axis class
+// Figure inner axis class
 class Axis {
     constructor() {
         this.center = 0
@@ -25,13 +26,14 @@ class Axis {
 }
 
 
-// figures.main class containing main plot component data
+// Figure class containing main plot component data
 class Figure {
     constructor(
         window_size_width, window_size_height, padding_left,
         padding_top, padding_right, padding_bottom, style_color, style_width,
         grid_vertical_amount, grid_vertical_color, grid_vertical_width,
         grid_horizontal_amount, grid_horizontal_color, grid_horizontal_width,
+        canvas_density
     ) {
         this.window_size = {
             width: window_size_width,
@@ -69,7 +71,7 @@ class Figure {
         }
         this.canvas = React.createRef()
         this.context = null
-        this.canvas_density = 25
+        this.canvas_density = canvas_density
     }
     // Canvas actual width
     get_width() {
@@ -104,18 +106,27 @@ export default class Plot extends React.Component {
                     850, 480,
                     0, 0.1, 0, 0.1,
                     '#ff0000', 2, 10, '#d9d9d9',
-                    1, 10, '#d9d9d9', 1
+                    1, 10, '#d9d9d9', 1, 25
 
                 ),
                 volume: new Figure(
                     850, 192,
                     0, 0.1, 0, 0,
                     '#ff0000', 2, 10, '#d9d9d9',
-                    1, 4, '#d9d9d9', 1
+                    1, 4, '#d9d9d9', 1, 25
                 ),
-            }
+                hit: new Figure(
+                    850, 672,
+                    0, 0, 0, 0,
+                    '#ff0000', 2, 10, '#d9d9d9',
+                    1, 4, '#d9d9d9', 1, 1
+                )
+            },
+            tooltips: null
         }
         this.type = props.type
+        this.mouseMoveHandler = this.mouseMoveHandler.bind(this)
+        this.mouseOutHandler = this.mouseOutHandler.bind(this)
     }
     // Date-value type plot (<date:String>, <value:Number>)
     plot_date_value() {
@@ -193,15 +204,25 @@ export default class Plot extends React.Component {
             // Candle
             state.figures.main.context.beginPath()
             state.figures.main.context.strokeStyle = style
-            state.figures.main.context.moveTo((2 * i + 1) * state.figures.main.scale.width / 2, low)
-            state.figures.main.context.lineTo((2 * i + 1) * state.figures.main.scale.width / 2, high)
+            state.figures.main.context.moveTo((2 * i + 1.1) * state.figures.main.scale.width / 2, low)
+            state.figures.main.context.lineTo((2 * i + 1.1) * state.figures.main.scale.width / 2, high)
             state.figures.main.context.stroke()
             state.figures.main.context.fillStyle = style
-            state.figures.main.context.fillRect(i * this.state.figures.main.scale.width , open, this.state.figures.main.scale.width, close - open)
+            state.figures.main.context.fillRect(
+                (i + 0.1) * this.state.figures.main.scale.width ,
+                open,
+                this.state.figures.main.scale.width * 0.9,
+                close - open
+            )
             state.figures.main.context.closePath()
             // Volume
             state.figures.volume.context.fillStyle = style
-            state.figures.volume.context.fillRect(i * this.state.figures.main.scale.width , 0, this.state.figures.volume.scale.width, volume)
+            state.figures.volume.context.fillRect(
+                (i + 0.1) * this.state.figures.main.scale.width ,
+                0,
+                this.state.figures.volume.scale.width * 0.9,
+                volume
+            )
         }
         state.figures.main.context.restore()
         state.figures.volume.context.restore()
@@ -234,10 +255,12 @@ export default class Plot extends React.Component {
         context.closePath()
     }
 
-    componentDidMount() {
+    plot() {
         let state = this.state
         state.figures.main.context = state.figures.main.canvas.current.getContext('2d')
         state.figures.main.set_window()
+        state.figures.hit.context = state.figures.hit.canvas.current.getContext('2d')
+        state.figures.hit.set_window()
         this.show_grid(state.figures.main)
         switch (this.type) {
             case 'date_value':
@@ -252,25 +275,92 @@ export default class Plot extends React.Component {
         }
         this.setState(state)
     }
+    // Draws coordinate pointer and tooltips if mouse pointer is over canvas
+    mouseMoveHandler(event) {
+        const [x, y] = [
+            event.clientX - event.target.offsetLeft,
+            event.clientY - event.target.offsetTop
+        ]
+        const context = this.state.figures.hit.context
+        context.clearRect(0, 0, this.state.figures.hit.get_width(), this.state.figures.hit.get_height())
+        context.beginPath()
+        // Drawing horizontal line
+        context.moveTo(0, y)
+        context.lineTo(this.state.figures.hit.get_width(), y)
+        // Drawing vertical line
+        // Segment hit check
+        const segment_width = this.state.figures.hit.get_width() / Object.keys(this.state.data).length
+        const i = Math.floor(x / segment_width)
+        context.moveTo((2 * i + 1) * segment_width / 2, 0)
+        context.lineTo((2 * i + 1) * segment_width / 2, this.state.figures.hit.get_height())
+        context.stroke()
+        context.closePath()
+        // Data tooltips
+        const [date, {open, high, low, close, volume}] = Object.entries(this.state.data)[i]
+        this.setState({tooltips: {
+            date: date,
+            open: open,
+            high: high,
+            low: low,
+            close: close,
+            volume: volume,
+        }})
+    }
+    // Clear coordinate pointer and tooltips if mouse pointer is out of canvas
+    mouseOutHandler() {
+        const context = this.state.figures.hit.context
+        context.clearRect(0, 0, this.state.figures.hit.get_width(), this.state.figures.hit.get_height())
+        this.setState({tooltips: null})
+    }
+    // After-render plot building
+    componentDidMount() {
+        this.plot()
+    }
 
     componentDidUpdate() {
 
     }
 
     render() {
-        return this.type === 'date_value' ?
-            <div>
-                <canvas ref={this.state.figures.main.canvas} style={{border: '1px solid black'}}>
+        const tooltips = this.state.tooltips ?
+            this.type === 'date_value' ?
+            <div className={'plot_date_value_tooltips'}>
+            </div> :
+            <div className={'plot_financial_tooltips'}>
+                <span>Date: {this.state.tooltips.date}</span>
+                <span>Open: {this.state.tooltips.open}</span>
+                <span>High: {this.state.tooltips.high}</span>
+                <span>Low: {this.state.tooltips.low}</span>
+                <span>Close: {this.state.tooltips.close}</span>
+                <span>Volume: {this.state.tooltips.volume}</span>
+            </div> : null
+        const plot = this.type === 'date_value' ?
+            <div className={'plot_date_value_grid'}>
+                <canvas ref={this.state.figures.main.canvas} className={'canvas_main'}>
+                    Canvas tag is not supported by your browser.
+                </canvas>
+                <canvas ref={this.state.figures.hit.canvas} onMouseMove={this.mouseMoveHandler}
+                        onMouseOut={this.mouseOutHandler} className={'canvas_hit'}>
                     Canvas tag is not supported by your browser.
                 </canvas>
             </div> :
-            <div>
-                <canvas ref={this.state.figures.main.canvas} style={{border: '1px solid black'}}>
+            <div className={'plot_financial_grid'}>
+                <canvas ref={this.state.figures.main.canvas} className={'canvas_main'}>
                     Canvas tag is not supported by your browser.
                 </canvas>
-                <canvas ref={this.state.figures.volume.canvas} style={{border: '1px solid black'}}>
+                <canvas ref={this.state.figures.volume.canvas} className={'canvas_volume'}>
+                    Canvas tag is not supported by your browser.
+                </canvas>
+                <canvas ref={this.state.figures.hit.canvas} onMouseMove={this.mouseMoveHandler}
+                        onMouseOut={this.mouseOutHandler} className={'canvas_hit'}>
                     Canvas tag is not supported by your browser.
                 </canvas>
             </div>
+        return (
+            <>
+                {tooltips}
+                {plot}
+            </>
+        )
     }
 }
