@@ -30,6 +30,15 @@
     grid-column-end: 2;
 }
 
+.canvas_dates {
+    grid-row-start: 3;
+    grid-row-end: 4;
+    grid-column-start: 1;
+    grid-column-end: 2;
+    border: solid black 1px;
+    cursor: w-resize;
+}
+
 .plot_financial_tooltips {
     position: absolute;
     display: flex;
