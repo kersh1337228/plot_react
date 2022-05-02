@@ -1,36 +1,12 @@
 import React from 'react'
-import './plot.css'
-
-
-// Figure inner axis class
-class Axis {
-    constructor() {
-        this.center = 0
-        this.visible = true
-        this.color = '#000000'
-        this.width = 1
-        this.labels = {
-            visible: true,
-            amount: 0,
-            font: {
-                style: 'normal',
-                size: 10,
-                fontFamily: 'Times New Roman'
-            },
-            color: '#000000'
-        }
-    }
-    get_labels_font(density) { // Canvas formatted label style
-        return `${this.labels.font.style} ${this.labels.font.size * density}px ${this.labels.font.fontFamily}`
-    }
-}
+import './PlotFinancial.css'
 
 
 // Figure class containing main plot component data
 class Figure {
     constructor(
-        window_size_width, window_size_height, padding_left=0,
-        padding_top=0, padding_right=0, padding_bottom=0, style_width=1,
+        window_size_width, window_size_height,
+        padding_left=0, padding_top=0, padding_right=0, padding_bottom=0,
         grid_vertical_amount=10, grid_vertical_color='#000000', grid_vertical_width=1,
         grid_horizontal_amount=10, grid_horizontal_color='#000000', grid_horizontal_width=1,
         canvas_density=1
@@ -49,10 +25,9 @@ class Figure {
             right: padding_right,
             bottom: padding_bottom
         }
-        this.style_width = style_width
         this.axes = {
-            x: new Axis(),
-            y: new Axis(),
+            x: 0,
+            y: 0,
         }
         this.grid = {
             vertical: {
@@ -78,10 +53,6 @@ class Figure {
     get_height() {
         return this.window_size.height * this.canvas_density
     }
-    // Rescales original line width for proper display
-    get_line_width() {
-        return this.style.width / (this.scale.height + this.scale.width)
-    }
     set_window() {
         this.canvas.current.style.width = `${this.window_size.width}px`
         this.canvas.current.style.height = `${this.window_size.height}px`
@@ -103,14 +74,16 @@ export default class PlotFinancial extends React.Component {
                 main: new Figure(
                     850, 480,
                     0, 0.1, 0, 0.1,
-                    1, 10, '#d9d9d9', 1,
-                    10, '#d9d9d9', 1, 1
+                    10, '#d9d9d9', 1,
+                    10, '#d9d9d9', 1,
+                    1
                 ),
                 volume: new Figure(
                     850, 192,
                     0, 0.1, 0, 0,
-                    1, 10, '#d9d9d9', 1,
-                    4, '#d9d9d9', 1, 1
+                    10, '#d9d9d9', 1,
+                    4, '#d9d9d9', 1,
+                    1
                 ),
                 hit: new Figure(850, 672),
                 dates: new Figure(850, 48, 0, 0.1)
@@ -143,7 +116,6 @@ export default class PlotFinancial extends React.Component {
         this.mouseUpHandlerMain = this.mouseUpHandlerMain.bind(this)
         //// Dates canvas
         this.mouseMoveHandlerDates = this.mouseMoveHandlerDates.bind(this)
-        this.mouseOutHandlerDates = this.mouseOutHandlerDates.bind(this)
         this.mouseDownHandlerDates = this.mouseDownHandlerDates.bind(this)
         this.mouseUpHandlerDates = this.mouseUpHandlerDates.bind(this)
     }
@@ -186,18 +158,18 @@ export default class PlotFinancial extends React.Component {
             Math.abs(Math.max.apply(null, volumes) - Math.min.apply(null, volumes))
         // Moving coordinates system
         //// Main
-        state.figures.main.axes.y.center = Math.max.apply(null, highs) *
+        state.figures.main.axes.y = Math.max.apply(null, highs) *
             state.figures.main.scale.height + state.figures.main.padding.top * state.figures.main.get_height()
-        state.figures.main.axes.x.center = state.figures.main.padding.left * state.figures.main.window_size.width
+        state.figures.main.axes.x = state.figures.main.padding.left * state.figures.main.get_width()
         state.figures.main.context.save()
-        state.figures.main.context.translate(state.figures.main.axes.x.center, state.figures.main.axes.y.center)
+        state.figures.main.context.translate(state.figures.main.axes.x, state.figures.main.axes.y)
         state.figures.main.context.scale(1, -state.figures.main.scale.height)
         //// Volume
-        state.figures.volume.axes.y.center = Math.max.apply(null, volumes) *
+        state.figures.volume.axes.y = Math.max.apply(null, volumes) *
             state.figures.volume.scale.height + state.figures.volume.padding.top * state.figures.volume.get_height()
-        state.figures.volume.axes.x.center = state.figures.volume.padding.left * state.figures.volume.window_size.width
+        state.figures.volume.axes.x = state.figures.volume.padding.left * state.figures.volume.get_width()
         state.figures.volume.context.save()
-        state.figures.volume.context.translate(state.figures.volume.axes.x.center, state.figures.volume.axes.y.center)
+        state.figures.volume.context.translate(state.figures.volume.axes.x, state.figures.volume.axes.y)
         state.figures.volume.context.scale(1, -state.figures.volume.scale.height)
         // Drawing plots
         const data_amount = Object.keys(data).length
@@ -262,6 +234,7 @@ export default class PlotFinancial extends React.Component {
                 state.figures.dates.get_height() * (state.figures.dates.padding.top + 0.3)
             )
         }
+        // Restoring context
         state.figures.main.context.restore()
         state.figures.volume.context.restore()
         this.setState(state, callback)
@@ -301,7 +274,8 @@ export default class PlotFinancial extends React.Component {
             event.clientY - event.target.offsetTop
         ]
         if (this.drag.main.state) { // If mouse is held moves data range
-            const x_offset = ((event.clientX - event.target.offsetLeft) - this.drag.main.position.x) / (this.state.figures.hit.get_width() * 200)
+            const x_offset = ((event.clientX - event.target.offsetLeft) - this.drag.main.position.x) /
+                (this.state.figures.hit.get_width() * 200)
             if (x_offset) {
                 // Copying current data range to new object
                 let data_range = {}
@@ -383,13 +357,12 @@ export default class PlotFinancial extends React.Component {
                 Object.assign(data_range, this.state.data_range)
                 if (x_offset < 0) { // Moving data range start to the left
                     data_range.start = data_range.start + x_offset <= 0 ?
-                        0 : data_range.end - (data_range.start + x_offset) > 0.15 ?
+                        0 : (data_range.end - (data_range.start + x_offset)) * Object.keys(this.state.data).length > 100 ?
                             data_range.start : data_range.start + x_offset
                 } else if (x_offset > 0) { // Moving data range start to the end
-                    data_range.start = data_range.end - (data_range.start + x_offset) < 0.005 ?
+                    data_range.start = (data_range.end - (data_range.start + x_offset)) * Object.keys(this.state.data).length < 5 ?
                         data_range.start : data_range.start + x_offset
                 } // Check if changes are visible (not visible on bounds)
-                console.log(data_range)
                 if (data_range.start !== this.state.data_range.start) {
                     this.setState({data_range: data_range}, () => {
                         this.plot() // Redrawing plot with new data range
@@ -397,9 +370,6 @@ export default class PlotFinancial extends React.Component {
                 }
             }
         }
-    }
-    mouseOutHandlerDates() {
-
     }
     mouseDownHandlerDates(event) {
         this.drag.dates = {
@@ -481,7 +451,6 @@ export default class PlotFinancial extends React.Component {
                         ref={this.state.figures.dates.canvas}
                         className={'canvas_dates'}
                         onMouseMove={this.mouseMoveHandlerDates}
-                        onMouseOut={this.mouseOutHandlerDates}
                         onMouseDown={this.mouseDownHandlerDates}
                         onMouseUp={this.mouseUpHandlerDates}>
                         Canvas tag is not supported by your browser.
